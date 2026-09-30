@@ -1,15 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { all, get, put } from "../models/store.js";
-import {
-  at,
-  day,
-  taskMinutes,
-  working,
-  workDates,
-  defaultSettings,
-} from "./rules.js";
+import { at, day, working, workDates, defaultSettings } from "./rules.js";
 import type { Event, Employee } from "../models/types.js";
 import { monthlyAttendance } from "./monthly-attendance.js";
+import { dailyWork } from "./projects.js";
 import { revokeSessions } from "../middleware/auth.js";
 export async function settings() {
   const value = (await get("settings", "company")) || defaultSettings;
@@ -83,10 +77,14 @@ export async function runJobs(now = new Date()) {
   for (const a of await all("attendance"))
     if (!a.logoutTime && now >= at(a.date, s.endTime))
       await closeSession(a.id, true);
+  const workLogs = await all("work_logs");
   for (const t of await all("tasks"))
     if (
       t.status === "In Progress" &&
-      taskMinutes(t, now) > t.estimatedMinutes + s.alertThreshold
+      workLogs
+        .filter((l) => l.taskId === t.id)
+        .reduce((sum, l) => sum + l.minutes, 0) >
+        t.estimatedMinutes + s.alertThreshold
     )
       await notifyOnce(
         `overrun-${t.id}`,
@@ -135,7 +133,45 @@ export async function snapshot(user: Employee) {
   const s = await settings(),
     admin = user.role === "admin",
     scope = (x: { employeeId: string }) => admin || x.employeeId === user.id;
+  const workLogs = (await all("work_logs")).filter(scope);
+  const tasks = (await all("tasks")).filter(scope).map((t) => {
+    const minutes = workLogs
+      .filter((l) => l.taskId === t.id)
+      .reduce((sum, l) => sum + l.minutes, 0);
+    return {
+      ...t,
+      startedAt: null,
+      actualMinutes: minutes,
+      elapsedMinutes: minutes,
+      isOverdue: minutes > t.estimatedMinutes + s.alertThreshold,
+    };
+  });
+  const projects = (await all("projects")).filter(scope).map((p) => {
+    const projectTasks = tasks.filter((t) => t.projectId === p.id);
+    return {
+      ...p,
+      totalMinutes: workLogs
+        .filter((l) => l.projectId === p.id)
+        .reduce((sum, l) => sum + l.minutes, 0),
+      taskCount: projectTasks.length,
+      completedCount: projectTasks.filter((t) => t.status === "Completed")
+        .length,
+      inProgressCount: projectTasks.filter((t) => t.status === "In Progress")
+        .length,
+      pendingCount: projectTasks.filter(
+        (t) => t.status === "Pending" || t.status === "Not Started",
+      ).length,
+    };
+  });
   return {
+    projects,
+    workLogs: workLogs.sort(
+      (a, b) =>
+        b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt),
+    ),
+    dailyWork: (await all("employees"))
+      .filter((e) => e.role === "employee" && (admin || e.id === user.id))
+      .map((e) => dailyWork(e.id, day(), workLogs, s)),
     user: publicEmployee(user),
     settings: s,
     today: day(),
@@ -149,13 +185,7 @@ export async function snapshot(user: Employee) {
     attendance: (await all("attendance"))
       .filter(scope)
       .map((a) => ({ ...a, ...working(a, s) })),
-    tasks: (await all("tasks")).filter(scope).map((t) => ({
-      ...t,
-      elapsedMinutes: taskMinutes(t),
-      isOverdue:
-        t.status === "In Progress" &&
-        taskMinutes(t) > t.estimatedMinutes + s.alertThreshold,
-    })),
+    tasks,
     devices: (await all("devices"))
       .filter(scope)
       .map(({ tokenHash, ...d }) => d),

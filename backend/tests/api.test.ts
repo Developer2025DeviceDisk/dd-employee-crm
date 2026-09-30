@@ -4,23 +4,25 @@ import { spawn } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 test("authentication, device approval, employee isolation, CSRF, and mutations", async () => {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), "workpulse-test-"));
   const port = 14287;
-  const child = spawn(process.execPath, ["--import", "tsx", "src/app.ts"], {
-    env: {
-      ...process.env,
-      PORT: String(port),
-      DATA_FILE: path.join(dir, "test.json"),
-      DEMO_MODE: "true",
-      NODE_ENV: "test",
-      MONGODB_URI: "",
-      ADMIN_EMAIL: "admin@workpulse.local",
-      ADMIN_PASSWORD: "Workpulse@2026",
-    },
-    stdio: ["ignore", "pipe", "pipe"],
-  });
+  const start = () =>
+    spawn(process.execPath, ["--import", "tsx", "src/app.ts"], {
+      env: {
+        ...process.env,
+        PORT: String(port),
+        DATA_FILE: path.join(dir, "test.json"),
+        DEMO_MODE: "true",
+        NODE_ENV: "test",
+        MONGODB_URI: "",
+        ADMIN_EMAIL: "admin@workpulse.local",
+        ADMIN_PASSWORD: "Workpulse@2026",
+      },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  let child = start();
   let logs = "";
   child.stdout.on("data", (b) => (logs += b));
   child.stderr.on("data", (b) => (logs += b));
@@ -294,8 +296,41 @@ test("authentication, device approval, employee isolation, CSRF, and mutations",
         .status,
       404,
     );
+    // Existing tasks/time are migrated before serving requests.
+    assert.ok(e.tasks.every((t: any) => t.projectId && t.startedAt === null));
+    assert.ok(e.projects.every((p: any) => p.employeeId === e.user.id));
+    assert.ok(e.workLogs.every((l: any) => l.employeeId === e.user.id));
+    const project = await employee("/projects", "POST", {
+      name: "Employee project",
+      description: "Multiple modules",
+      employeeId: "emp-2",
+    });
+    assert.equal(project.status, 201);
+    assert.equal(project.body.employeeId, e.user.id);
+    const secondProject = await employee("/projects", "POST", {
+      name: "Second project",
+    });
+    assert.equal(secondProject.status, 201);
+    const foreignProject = a.projects.find(
+      (p: any) => p.employeeId !== e.user.id,
+    );
+    assert.ok(foreignProject);
+    assert.equal(
+      (
+        await employee("/tasks", "POST", {
+          projectId: foreignProject.id,
+          title: "Forbidden task",
+          description: "No access",
+          priority: "High",
+          estimatedMinutes: 60,
+        })
+      ).status,
+      404,
+    );
     const created = await employee("/tasks", "POST", {
+      projectId: project.body.id,
       title: "Integration check",
+      description: "Test the new work log flow",
       priority: "High",
       estimatedMinutes: 60,
       employeeId: "emp-2",
@@ -315,6 +350,124 @@ test("authentication, device approval, employee isolation, CSRF, and mutations",
       (t: any) => t.id === created.body.id,
     );
     assert.equal(updated.actualMinutes, 0);
+    assert.equal(updated.startedAt, null);
+    assert.equal(updated.elapsedMinutes, 0);
+    const secondTask = await employee("/tasks", "POST", {
+      projectId: secondProject.body.id,
+      title: "Second module",
+      description: "Parallel project",
+      priority: "Medium",
+      estimatedMinutes: 300,
+    });
+    assert.equal(secondTask.status, 201);
+    assert.equal(secondTask.body.status, "Pending");
+    const workDate = "2026-09-01";
+    const log = {
+      id: randomUUID(),
+      date: workDate,
+      minutes: 180,
+      details: "Implemented the module",
+    };
+    const logPath = `/tasks/${created.body.id}/logs`;
+    assert.equal((await employee(logPath, "POST", log)).status, 201);
+    assert.equal((await employee(logPath, "POST", log)).status, 200);
+    assert.equal(
+      (await employee(logPath, "POST", { ...log, minutes: 181 })).status,
+      409,
+    );
+    for (const invalid of [
+      { minutes: 0 },
+      { minutes: -1 },
+      { minutes: 1.5 },
+      { minutes: 1441 },
+      { date: "2099-01-01" },
+      { date: "2026-02-30" },
+      { date: "2000-01-01" },
+      { details: "" },
+    ])
+      assert.equal(
+        (
+          await employee(logPath, "POST", {
+            ...log,
+            id: randomUUID(),
+            ...invalid,
+          })
+        ).status,
+        400,
+      );
+    assert.equal(
+      (
+        await employee(logPath, "POST", {
+          ...log,
+          id: randomUUID(),
+          minutes: 1300,
+        })
+      ).status,
+      400,
+    );
+    assert.equal(
+      (
+        await employee(`/tasks/${secondTask.body.id}/logs`, "POST", {
+          ...log,
+          id: randomUUID(),
+          minutes: 300,
+        })
+      ).status,
+      201,
+    );
+    assert.equal(
+      (
+        await employee(
+          `/tasks/${a.tasks.find((t: any) => t.employeeId !== e.user.id).id}/logs`,
+          "POST",
+          { ...log, id: randomUUID() },
+        )
+      ).status,
+      404,
+    );
+    assert.equal(
+      (
+        await employee(`/tasks/${created.body.id}`, "PATCH", {
+          status: "Completed",
+        })
+      ).status,
+      200,
+    );
+    const afterLogs = (await employee("/state")).body;
+    const ownProject = afterLogs.projects.find(
+      (p: any) => p.id === project.body.id,
+    );
+    assert.equal(ownProject.totalMinutes, 180);
+    assert.equal(ownProject.taskCount, 1);
+    assert.equal(ownProject.completedCount, 1);
+    assert.equal(
+      afterLogs.tasks.find((t: any) => t.id === created.body.id).elapsedMinutes,
+      180,
+    );
+    assert.equal(
+      afterLogs.workLogs.filter((l: any) => l.id === log.id).length,
+      1,
+    );
+    const adminView = (await admin("/state")).body;
+    assert.equal(
+      adminView.projects.find((p: any) => p.id === secondProject.body.id)
+        .totalMinutes,
+      300,
+    );
+    assert.equal(
+      adminView.workLogs.find((l: any) => l.id === log.id).employeeId,
+      e.user.id,
+    );
+    assert.equal(
+      afterLogs.workLogs
+        .filter(
+          (l: any) =>
+            l.date === workDate &&
+            [created.body.id, secondTask.body.id].includes(l.taskId),
+        )
+        .reduce((sum: number, l: any) => sum + l.minutes, 0),
+      480,
+    );
     assert.equal(
       (
         await employee("/reports/daily", "POST", {
@@ -453,6 +606,40 @@ test("authentication, device approval, employee isolation, CSRF, and mutations",
     assert.equal((await outsider("/state")).status, 401);
     assert.equal((await employee("/auth/logout", "POST", {})).status, 200);
     assert.equal((await employee("/state")).status, 401);
+    const beforeRestart = (await admin("/state")).body;
+    child.kill();
+    await new Promise<void>((resolve) => {
+      if (child.exitCode !== null || child.signalCode !== null) resolve();
+      else child.once("exit", () => resolve());
+    });
+    child = start();
+    child.stdout.on("data", (b) => (logs += b));
+    child.stderr.on("data", (b) => (logs += b));
+    let restarted = false;
+    for (let i = 0; i < 100; i++) {
+      try {
+        if ((await fetch(`http://127.0.0.1:${port}/api/config`)).ok) {
+          restarted = true;
+          break;
+        }
+      } catch {}
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+    assert.ok(restarted, logs);
+    const afterRestart = (await admin("/state")).body;
+    assert.equal(afterRestart.projects.length, beforeRestart.projects.length);
+    assert.deepEqual(afterRestart.workLogs, beforeRestart.workLogs);
+    assert.equal(
+      afterRestart.tasks.find((t: any) => t.id === created.body.id)
+        .elapsedMinutes,
+      180,
+    );
+    assert.equal(
+      afterRestart.tasks.find((t: any) => t.id === secondTask.body.id)
+        .elapsedMinutes,
+      300,
+    );
+    assert.ok(afterRestart.tasks.every((t: any) => t.startedAt === null));
   } finally {
     child.kill();
     await new Promise<void>((r) => {

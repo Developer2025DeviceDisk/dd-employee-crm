@@ -37,6 +37,7 @@ export interface Attendance {
   autoClosed: boolean;
 }
 export interface Task {
+  projectId?: string;
   id: string;
   employeeId: string;
   title: string;
@@ -46,7 +47,7 @@ export interface Task {
   actualMinutes: number;
   startedAt: string | null;
   completedAt: string | null;
-  status: "Not Started" | "In Progress" | "Completed" | "Blocked";
+  status: "Pending" | "Not Started" | "In Progress" | "Completed" | "Blocked";
   date: string;
   comment: string;
   adminComment: string;
@@ -83,4 +84,37 @@ export interface DailyReport {
   summary: string;
   blockers: string;
   createdAt: string;
+}
+export interface Project {
+  id: string;
+  employeeId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+  totalMinutes: number;
+  taskCount: number;
+  completedCount: number;
+  inProgressCount: number;
+  pendingCount: number;
+}
+export interface WorkLog {
+  id: string;
+  employeeId: string;
+  projectId: string;
+  taskId: string;
+  date: string;
+  minutes: number;
+  details: string;
+  createdAt: string;
+  recordedBy: string;
+  source: "manual" | "legacy";
+}
+export interface DailyWork {
+  employeeId: string;
+  date: string;
+  loggedMinutes: number;
+  countedMinutes: number;
+  requiredMinutes: number;
+  remainingMinutes: number;
+  status: string;
 }

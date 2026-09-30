@@ -2,6 +2,22 @@
 
 Express + TypeScript with MongoDB/Mongoose support and a local JSON demo store.
 
+## Projects and work logs
+
+Employees create their own projects and tasks. Admins can create projects for employees and view every project, task, and log. Tasks inherit the project's employee; an employee cannot access another employee's projects or logs.
+
+- `POST /api/projects`: `name`, `description`, optional admin-only `employeeId`.
+- `POST /api/tasks`: `projectId`, `title`, `description`, `estimatedMinutes`, `priority`.
+- `PATCH /api/tasks/:id`: `status` (`Pending`, `In Progress`, `Completed`, or `Blocked`) and comments. Status changes never run a timer.
+- `POST /api/tasks/:id/logs`: UUID `id`, `date` (`YYYY-MM-DD`, Asia/Kolkata), integer `minutes`, and `details`. Reuse the same ID when retrying the same submission. Logs cannot be future-dated, precede joining, or exceed 24 hours per employee/day across all projects.
+- `GET /api/state`: includes scoped `projects` with task counts/time totals, `workLogs`, and today's `dailyWork` summary. Task time is the sum of its work logs.
+
+Daily logged-work progress uses an **8-hour** target across all projects. Weekends, configured holidays, and other configured days off have no target or shortfall; any optional logs on those dates remain visible for project history but do not count toward required daily work. Attendance login/logout records and their existing monthly reports retain their separate attendance calculations.
+
+On startup, existing tasks without projects move into an employee-owned **Existing work** project. Previously saved task minutes become an imported work-log entry on the original task date, explicitly marked because an original daily breakdown is unavailable. Running timers are stopped; time since their last saved value is not invented. Migration uses deterministic IDs so retries do not duplicate imported entries. No employee, task, or attendance history is deleted.
+
+Deploy the updated backend before the frontend so the project/log fields and endpoints exist.
+
 ```text
 backend/
   src/

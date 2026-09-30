@@ -36,6 +36,9 @@ export function EmployeeHome({ state, busy, mutate, onTask, onReport }: any) {
   const a = state.attendance.find(
     (a: Entry) => a.employeeId === state.user.id && a.date === state.today,
   );
+  const work = state.dailyWork.find(
+    (entry: { employeeId: string }) => entry.employeeId === state.user.id,
+  );
   return (
     <>
       <section className="welcome-card">
@@ -44,7 +47,7 @@ export function EmployeeHome({ state, busy, mutate, onTask, onReport }: any) {
           <h2>
             {a
               ? a.logoutTime
-                ? "Your workday is complete."
+                ? "You have checked out for today."
                 : a.breakStartedAt
                   ? "Take a moment to recharge."
                   : "You’re checked in. Let’s make progress."
@@ -110,16 +113,22 @@ export function EmployeeHome({ state, busy, mutate, onTask, onReport }: any) {
       </section>
       <div className="stats-grid three">
         <Stat
-          title="Effective working time"
-          value={a ? Math.floor(a.effectiveMinutes / 60) : 0}
+          title="Logged work today"
+          value={Math.floor((work?.countedMinutes || 0) / 60)}
           icon={<Clock size={19} />}
-          detail={a ? duration(a.effectiveMinutes) : "Not checked in"}
+          detail={duration(work?.countedMinutes || 0)}
         />
         <Stat
           title="Daily target"
-          value={state.settings.requiredHours}
+          value={(work?.requiredMinutes || 0) / 60}
           icon={<CheckCircle2 size={19} />}
-          detail={`${a ? duration(Math.max(0, -a.difference)) : duration(state.settings.requiredHours * 60)} remaining`}
+          detail={
+            work?.status === "Completed"
+              ? "8 hours completed"
+              : work?.status === "Day off"
+                ? "No work target today"
+                : `${duration(work?.remainingMinutes || 0)} remaining`
+          }
         />
         <Stat
           title="Tasks completed"

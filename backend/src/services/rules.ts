@@ -1,4 +1,4 @@
-import type { Attendance, Settings, Task } from "../models/types.js";
+import type { Attendance, Settings } from "../models/types.js";
 export const defaultSettings: Settings = {
   id: "company",
   startTime: "10:00",
@@ -53,14 +53,6 @@ export function working(a: Attendance, settings: Settings, now = new Date()) {
       ? 0
       : Math.floor(effectiveMinutes - settings.requiredHours * 60),
   };
-}
-export function taskMinutes(t: Task, now = new Date()) {
-  return Math.floor(
-    t.actualMinutes +
-      (t.status === "In Progress" && t.startedAt
-        ? Math.max(0, (now.getTime() - new Date(t.startedAt).getTime()) / 60000)
-        : 0),
-  );
 }
 export function workDates(month: string, settings: Settings, now = new Date()) {
   const result: string[] = [];

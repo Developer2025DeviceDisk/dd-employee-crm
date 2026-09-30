@@ -38,6 +38,7 @@ export interface Attendance {
   autoClosed: boolean;
 }
 export interface Task {
+  projectId?: string;
   id: string;
   employeeId: string;
   title: string;
@@ -47,7 +48,7 @@ export interface Task {
   actualMinutes: number;
   startedAt: string | null;
   completedAt: string | null;
-  status: "Not Started" | "In Progress" | "Completed" | "Blocked";
+  status: "Pending" | "Not Started" | "In Progress" | "Completed" | "Blocked";
   date: string;
   comment: string;
   adminComment: string;
@@ -95,6 +96,8 @@ export interface DailyReport {
   createdAt: string;
 }
 export interface Tables {
+  projects: Project;
+  work_logs: WorkLog;
   attendance_adjustments: AttendanceAdjustment;
   employees: Employee;
   devices: Device;
@@ -106,6 +109,25 @@ export interface Tables {
   sessions: Session;
   settings: Settings;
   daily_reports: DailyReport;
+}
+export interface Project {
+  id: string;
+  employeeId: string;
+  name: string;
+  description: string;
+  createdAt: string;
+}
+export interface WorkLog {
+  id: string;
+  employeeId: string;
+  projectId: string;
+  taskId: string;
+  date: string;
+  minutes: number;
+  details: string;
+  createdAt: string;
+  recordedBy: string;
+  source: "manual" | "legacy";
 }
 export interface AttendanceAdjustment {
   id: string;

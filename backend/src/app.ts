@@ -7,6 +7,7 @@ import path from "node:path";
 import { ZodError } from "zod";
 import { connectStore } from "./models/store.js";
 import { seed } from "./services/seed.js";
+import { migrateTaskLogs } from "./services/projects.js";
 import { runJobs } from "./services/operations.js";
 import { api } from "./controllers/api.js";
 import { allowAllOrigins } from "./middleware/cors.js";
@@ -22,6 +23,7 @@ if (
   );
 await connectStore();
 await seed(!production && process.env.DEMO_MODE !== "false");
+await migrateTaskLogs();
 export const app = express();
 app.disable("x-powered-by");
 if (production) app.set("trust proxy", 1);

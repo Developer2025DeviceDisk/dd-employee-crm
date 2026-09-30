@@ -43,7 +43,8 @@ import { Badge, Avatar, Empty, Modal, Stat, SearchBox } from "./components/ui";
 import { WeekChart, TeamTable } from "./components/dashboard";
 import { Employees, EmployeeForm, EmployeeProfile } from "./pages/Employees";
 import { Attendance } from "./pages/Attendance";
-import { Tasks, TaskForm, TaskDetail } from "./pages/WorkMonitoring";
+import { TaskForm, TaskDetail } from "./pages/WorkMonitoring";
+import { Projects, LogWorkForm, WorkLogs } from "./pages/Projects";
 import { EmployeeHome } from "./pages/EmployeeWorkspace";
 import { Reports } from "./pages/Reports";
 import { SettingsForm } from "./pages/Settings";
@@ -444,7 +445,9 @@ export default function App() {
                   detail={
                     <>
                       <span className="green">
-                        {isWeekend(state.today) ? 'No attendance required' : `${people.length ? Math.round((present / people.length) * 100) : 0}% attendance`}
+                        {isWeekend(state.today)
+                          ? "No attendance required"
+                          : `${people.length ? Math.round((present / people.length) * 100) : 0}% attendance`}
                       </span>
                       <span>
                         {isWeekend(state.today)
@@ -551,7 +554,7 @@ export default function App() {
                           <small>
                             {t.status === "Blocked"
                               ? "Blocked · Waiting for review"
-                              : `${duration(t.elapsedMinutes)} actual / ${duration(t.estimatedMinutes)} estimated`}
+                              : `${duration(t.elapsedMinutes)} logged / ${duration(t.estimatedMinutes)} estimated`}
                           </small>
                         </span>
                         <ChevronRight size={15} />
@@ -675,11 +678,10 @@ export default function App() {
             />
           )}
           {page === "Work monitoring" && (
-            <Tasks
+            <Projects
               state={state}
-              search={search}
-              setSearch={setSearch}
-              onAdd={() => setModal("task")}
+              busy={busy}
+              mutate={mutate}
               onSelect={setSelectedTask}
             />
           )}
@@ -692,11 +694,10 @@ export default function App() {
                 onTask={() => setModal("task")}
                 onReport={() => setModal("report")}
               />
-              <Tasks
+              <Projects
                 state={state}
-                search={search}
-                setSearch={setSearch}
-                onAdd={() => setModal("task")}
+                busy={busy}
+                mutate={mutate}
                 onSelect={setSelectedTask}
               />
             </>
@@ -1089,7 +1090,11 @@ export default function App() {
         </Modal>
       )}
       {selectedTask && (
-        <Modal title="Task details" onClose={() => setSelectedTask(null)}>
+        <Modal
+          title="Task details and work logs"
+          wide
+          onClose={() => setSelectedTask(null)}
+        >
           <TaskDetail
             task={
               state.tasks.find((t) => t.id === selectedTask.id) || selectedTask
@@ -1109,6 +1114,13 @@ export default function App() {
                 setSelectedTask(null);
             }}
           />
+          <LogWorkForm
+            task={selectedTask}
+            state={state}
+            busy={busy}
+            mutate={mutate}
+          />
+          <WorkLogs state={state} taskId={selectedTask.id} />
         </Modal>
       )}
     </div>

@@ -126,7 +126,7 @@ export async function seed(demo: boolean) {
         : i % 4 === 1
           ? "Completed"
           : i > 9
-            ? "Not Started"
+            ? "Pending"
             : "In Progress";
     await put("tasks", {
       id: `task-${i}`,
@@ -138,12 +138,7 @@ export async function seed(demo: boolean) {
       estimatedMinutes: i === 0 ? 180 : 240,
       actualMinutes:
         status === "Completed" ? 215 : status === "Blocked" ? 150 : 0,
-      startedAt:
-        status === "In Progress"
-          ? new Date(
-              now.getTime() - (i === 0 ? 225 : 60 + i * 10) * 60000,
-            ).toISOString()
-          : null,
+      startedAt: null,
       completedAt: status === "Completed" ? now.toISOString() : null,
       status,
       date: today,

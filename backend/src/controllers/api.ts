@@ -20,7 +20,7 @@ import {
   deviceCredential,
   rememberDevice,
 } from "../middleware/auth.js";
-import { at, day, late, taskMinutes, isWeekend } from "../services/rules.js";
+import { at, day, late, isWeekend } from "../services/rules.js";
 import { monthlyAttendance } from "../services/monthly-attendance.js";
 import {
   settings,
@@ -382,12 +382,10 @@ api.put(
         .json({ error: "Choose a valid date on or after the joining date." });
     const id = `${input.employeeId}:${input.date}`;
     if (isWeekend(input.date) && input.status !== "Automatic")
-      return res
-        .status(400)
-        .json({
-          error:
-            "Saturday and Sunday are fixed weekly offs. Leave and Half Day cannot be recorded on these dates.",
-        });
+      return res.status(400).json({
+        error:
+          "Saturday and Sunday are fixed weekly offs. Leave and Half Day cannot be recorded on these dates.",
+      });
     const old = await get("attendance_adjustments", id);
     if (input.status === "Automatic")
       await remove("attendance_adjustments", id);
@@ -434,12 +432,10 @@ api.post(
   "/attendance/check-in",
   route(async (req, res) => {
     if (isWeekend(day()))
-      return res
-        .status(400)
-        .json({
-          error:
-            "Today is a weekly off. No attendance or working hours are required.",
-        });
+      return res.status(400).json({
+        error:
+          "Today is a weekly off. No attendance or working hours are required.",
+      });
     if (req.user.role !== "employee")
       return res
         .status(400)
@@ -582,19 +578,50 @@ api.patch(
   }),
 );
 api.post(
-  "/tasks",
+  "/projects",
   route(async (req, res) => {
     const input = z
       .object({
-        title: z.string().min(3).max(150),
-        description: z.string().max(3000).default(""),
-        estimatedMinutes: z.number().int().min(1).max(10080),
-        priority: z.enum(["Low", "Medium", "High", "Critical"]),
+        name: z.string().trim().min(3).max(150),
+        description: z.string().trim().max(3000).default(""),
         employeeId: z.string().optional(),
       })
       .parse(req.body);
     const owner =
       req.user.role === "admin" ? input.employeeId || req.user.id : req.user.id;
+    const employee = await get("employees", owner);
+    if (!employee || employee.status !== "Active")
+      return res.status(400).json({ error: "Active employee required." });
+    const project = await put("projects", {
+      ...input,
+      id: randomUUID(),
+      employeeId: owner,
+      createdAt: new Date().toISOString(),
+    });
+    await event("audit_logs", req.user.id, "Project created", project.name);
+    res.status(201).json(project);
+  }),
+);
+api.post(
+  "/tasks",
+  route(async (req, res) => {
+    const input = z
+      .object({
+        projectId: z.string().min(1),
+        title: z.string().min(3).max(150),
+        description: z.string().trim().min(1).max(3000),
+        estimatedMinutes: z.number().int().min(1).max(10080),
+        priority: z.enum(["Low", "Medium", "High", "Critical"]),
+        employeeId: z.string().optional(),
+      })
+      .parse(req.body);
+    const project = await get("projects", input.projectId);
+    if (
+      !project ||
+      (req.user.role !== "admin" && project.employeeId !== req.user.id)
+    )
+      return res.status(404).json({ error: "Project not found." });
+    const owner = project.employeeId;
     if (!(await get("employees", owner)))
       return res.status(400).json({ error: "Employee not found." });
     const t = await put("tasks", {
@@ -604,7 +631,7 @@ api.post(
       actualMinutes: 0,
       startedAt: null,
       completedAt: null,
-      status: "Not Started",
+      status: "Pending",
       date: day(),
       comment: "",
       adminComment: "",
@@ -622,7 +649,7 @@ api.patch(
     const patch = z
       .object({
         status: z
-          .enum(["Not Started", "In Progress", "Completed", "Blocked"])
+          .enum(["Pending", "In Progress", "Completed", "Blocked"])
           .optional(),
         comment: z.string().max(3000).optional(),
         adminComment: z.string().max(3000).optional(),
@@ -632,9 +659,7 @@ api.patch(
       return res.sendStatus(403);
     const old = t.status;
     if (patch.status && patch.status !== t.status) {
-      t.actualMinutes = taskMinutes(t);
-      t.startedAt =
-        patch.status === "In Progress" ? new Date().toISOString() : null;
+      t.startedAt = null;
       t.completedAt =
         patch.status === "Completed" ? new Date().toISOString() : null;
     }
@@ -655,6 +680,78 @@ api.patch(
         t.title,
       );
     res.json({ ok: true });
+  }),
+);
+api.post(
+  "/tasks/:id/logs",
+  route(async (req, res) => {
+    const task = await get("tasks", req.params.id);
+    if (
+      !task ||
+      !task.projectId ||
+      (req.user.role !== "admin" && task.employeeId !== req.user.id)
+    )
+      return res.status(404).json({ error: "Task not found." });
+    const input = z
+      .object({
+        id: z.string().uuid(),
+        date: z
+          .string()
+          .regex(/^\d{4}-\d{2}-\d{2}$/)
+          .refine((d) => {
+            const parsed = at(d, "12:00");
+            return (
+              !Number.isNaN(parsed.getTime()) && day(parsed) === d && d <= day()
+            );
+          }, "Enter a valid date no later than today."),
+        minutes: z.number().int().min(1).max(1440),
+        details: z.string().trim().min(1).max(3000),
+      })
+      .parse(req.body);
+    const previous = await get("work_logs", input.id);
+    if (previous) {
+      if (
+        previous.taskId !== task.id ||
+        previous.recordedBy !== req.user.id ||
+        previous.date !== input.date ||
+        previous.minutes !== input.minutes ||
+        previous.details !== input.details
+      )
+        return res
+          .status(409)
+          .json({ error: "This work-log ID has already been used." });
+      return res.json(previous);
+    }
+    const owner = await get("employees", task.employeeId);
+    if (!owner || input.date < owner.joiningDate)
+      return res
+        .status(400)
+        .json({
+          error: "Work date cannot precede the employee's joining date.",
+        });
+    const total = (await all("work_logs"))
+      .filter((l) => l.employeeId === task.employeeId && l.date === input.date)
+      .reduce((sum, l) => sum + l.minutes, 0);
+    if (total + input.minutes > 1440)
+      return res
+        .status(400)
+        .json({ error: "Total logged time cannot exceed 24 hours in a day." });
+    const log = await put("work_logs", {
+      ...input,
+      employeeId: task.employeeId,
+      projectId: task.projectId,
+      taskId: task.id,
+      recordedBy: req.user.id,
+      createdAt: new Date().toISOString(),
+      source: "manual",
+    });
+    await event(
+      "audit_logs",
+      req.user.id,
+      "Work logged",
+      `${task.title}: ${input.minutes} minutes on ${input.date}`,
+    );
+    res.status(201).json(log);
   }),
 );
 api.post(

@@ -44,9 +44,10 @@ export function Tasks({
     <section className="panel tasks-section">
       <div className="panel-heading">
         <div>
-          <h2>Team priorities</h2>
+          <h2>Project tasks</h2>
           <p>
-            Estimates guide conversations. Overruns are a prompt to check in.
+            Record completed work in dated logs. Task status does not start a
+            timer.
           </p>
         </div>
         <button className="button primary" onClick={onAdd}>
@@ -56,17 +57,21 @@ export function Tasks({
       </div>
       <div className="table-toolbar">
         <div className="table-tabs">
-          {["All tasks", "In Progress", "Completed", "Needs review"].map(
-            (f) => (
-              <button
-                className={filter === f ? "selected" : ""}
-                onClick={() => setFilter(f)}
-                key={f}
-              >
-                {f}
-              </button>
-            ),
-          )}
+          {[
+            "All tasks",
+            "Pending",
+            "In Progress",
+            "Completed",
+            "Needs review",
+          ].map((f) => (
+            <button
+              className={filter === f ? "selected" : ""}
+              onClick={() => setFilter(f)}
+              key={f}
+            >
+              {f}
+            </button>
+          ))}
         </div>
         <SearchBox
           value={search}
@@ -102,8 +107,11 @@ export function Tasks({
                         : "blue"
                 }
               >
-                {t.isOverdue ? "Estimate exceeded" : t.status}
+                {t.status}
               </Badge>
+              {t.isOverdue && (
+                <span className="muted"> Logged time exceeds estimate</span>
+              )}
               <div className="task-times">
                 <span>
                   <Clock size={14} />
@@ -150,10 +158,12 @@ export function TaskForm({
   state,
   busy,
   onSubmit,
+  projectId,
 }: {
   state: State;
   busy: boolean;
   onSubmit: (data: any) => void;
+  projectId?: string;
 }) {
   return (
     <form
@@ -165,6 +175,27 @@ export function TaskForm({
       }}
     >
       <label>
+        Project
+        <select name="projectId" required defaultValue={projectId || ""}>
+          <option value="" disabled>
+            Select a project
+          </option>
+          {state.projects.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {state.user.role === "admin"
+                ? ` — ${state.employees.find((e) => e.id === p.employeeId)?.name || "Former employee"}`
+                : ""}
+            </option>
+          ))}
+        </select>
+      </label>
+      {!state.projects.length && (
+        <p className="info-box">
+          Create a project in your workspace before adding a task.
+        </p>
+      )}
+      <label>
         What are you working on?
         <input
           autoFocus
@@ -174,20 +205,6 @@ export function TaskForm({
           placeholder="e.g. CRM dashboard development"
         />
       </label>
-      {state.user.role === "admin" && (
-        <label>
-          Assign to
-          <select name="employeeId">
-            {state.employees
-              .filter((e) => e.role === "employee" && e.status === "Active")
-              .map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-          </select>
-        </label>
-      )}
       <div className="form-row">
         <label>
           Estimated hours
@@ -214,11 +231,16 @@ export function TaskForm({
         Description
         <textarea
           name="description"
+          required
+          maxLength={3000}
           rows={4}
           placeholder="Add context, expected outcomes, or helpful links…"
         />
       </label>
-      <button className="button primary" disabled={busy}>
+      <button
+        className="button primary"
+        disabled={busy || !state.projects.length}
+      >
         Create task <ArrowRight size={16} />
       </button>
     </form>
@@ -259,7 +281,7 @@ export function TaskDetail({
           <strong>{duration(task.estimatedMinutes)}</strong>
         </div>
         <div>
-          <small>Actual time</small>
+          <small>Logged time</small>
           <strong>{duration(task.elapsedMinutes)}</strong>
         </div>
         <div>
@@ -276,7 +298,7 @@ export function TaskDetail({
       <label>
         Task status
         <select name="status" defaultValue={task.status}>
-          {["Not Started", "In Progress", "Completed", "Blocked"].map((s) => (
+          {["Pending", "In Progress", "Completed", "Blocked"].map((s) => (
             <option key={s}>{s}</option>
           ))}
         </select>

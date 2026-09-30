@@ -2,6 +2,17 @@
 
 React + TypeScript + Vite. All UI code and frontend configuration live here.
 
+## Project workflow
+
+1. Employees open **My workspace**; admins open **Work monitoring**.
+2. Choose **Create project**, then open its card. Employees can keep multiple projects active.
+3. Choose **Add task** and enter its name, description, estimate, and priority.
+4. Open a task to update its status or **Log work** with a date, minutes spent, and work details. Changing status does not start a timer.
+5. **Daily work progress** totals work across projects for the selected date and shows progress toward 8 hours. Days off have no target.
+6. Each project shows total logged time, total tasks, completed tasks, in-progress tasks, pending tasks, and its work-log history. Admins can monitor all employees.
+
+Work-log time is entered manually; estimates are never automatically counted as work. Imported historical totals are labeled in the log table. Attendance reports continue to describe login/logout attendance separately from logged task work.
+
 ```text
 frontend/
   src/

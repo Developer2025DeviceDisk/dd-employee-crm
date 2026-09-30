@@ -5,12 +5,13 @@ import {
   day,
   late,
   working,
-  taskMinutes,
   workDates,
   defaultSettings as s,
 } from "../src/services/rules.js";
 import type { Attendance, Task } from "../src/models/types.js";
 import { monthlyAttendance } from "../src/services/monthly-attendance.js";
+import { dailyWork } from "../src/services/projects.js";
+import type { WorkLog } from "../src/models/types.js";
 test("weekends remain off despite seven-day settings and historical sessions or leave", () => {
   const policy = { ...s, workingDays: [0, 1, 2, 3, 4, 5, 6] };
   const record = (date: string): Attendance => ({
@@ -242,17 +243,40 @@ test("configured later close permits overtime", () => {
     30,
   );
 });
-test("task clock includes accumulated time and pauses for blocked tasks", () => {
-  const t = {
-    actualMinutes: 30,
-    status: "In Progress",
-    startedAt: "2026-09-28T05:00:00Z",
-  } as Task;
-  assert.equal(taskMinutes(t, new Date("2026-09-28T06:15:00Z")), 105);
-  assert.equal(
-    taskMinutes({ ...t, status: "Blocked" }, new Date("2026-09-28T06:15:00Z")),
-    30,
-  );
+test("daily work adds logs across projects, requires eight hours, and excludes days off", () => {
+  const log = (
+    minutes: number,
+    projectId: string,
+    date = "2026-09-28",
+    employeeId = "e",
+  ) => ({ minutes, projectId, date, employeeId }) as WorkLog;
+  const logs = [
+    log(120, "a"),
+    log(180, "b"),
+    log(179, "c"),
+    log(300, "a", "2026-09-29"),
+    log(400, "a", "2026-09-28", "other"),
+  ];
+  let result = dailyWork("e", "2026-09-28", logs, s);
+  assert.equal(result.loggedMinutes, 479);
+  assert.equal(result.requiredMinutes, 480);
+  assert.equal(result.remainingMinutes, 1);
+  assert.equal(result.status, "Incomplete");
+  logs.push(log(1, "d"));
+  result = dailyWork("e", "2026-09-28", logs, s);
+  assert.equal(result.status, "Completed");
+  assert.equal(result.remainingMinutes, 0);
+  for (const date of ["2026-09-26", "2026-09-27", "2026-09-30"]) {
+    const off = dailyWork("e", date, [log(60, "a", date)], {
+      ...s,
+      holidays: ["2026-09-30"],
+    });
+    assert.equal(off.loggedMinutes, 60);
+    assert.equal(off.countedMinutes, 0);
+    assert.equal(off.requiredMinutes, 0);
+    assert.equal(off.remainingMinutes, 0);
+    assert.equal(off.status, "Day off");
+  }
 });
 test("monthly working dates exclude weekends, holidays, and future dates", () => {
   const dates = workDates(

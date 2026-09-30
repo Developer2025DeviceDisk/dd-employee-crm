@@ -6,6 +6,9 @@ import type {
   Event,
   Settings,
   DailyReport,
+  Project,
+  WorkLog,
+  DailyWork,
 } from "../types/domain";
 export type Person = Employee;
 export type Entry = Attendance & {
@@ -16,6 +19,9 @@ export type Entry = Attendance & {
 };
 export type Work = Task & { elapsedMinutes: number; isOverdue: boolean };
 export interface State {
+  projects: Project[];
+  workLogs: WorkLog[];
+  dailyWork: DailyWork[];
   user: Person;
   employees: Person[];
   attendance: Entry[];

@@ -5,6 +5,8 @@ import type { Tables } from "./types.js";
 import { backendRoot } from "../config/paths.js";
 type Key = keyof Tables;
 const keys: Key[] = [
+  "projects",
+  "work_logs",
   "attendance_adjustments",
   "employees",
   "devices",
