@@ -30,8 +30,8 @@ npm run dev
 
 Open http://127.0.0.1:5173. Start the backend separately on port 4000, or use `npm run dev` from the project root to start both.
 
-The frontend calls the backend directly, with no Vite proxy. In development, the default API URL uses the frontend's hostname on port 4000 (for example `http://127.0.0.1:4000/api`). Cookies are included in cross-origin requests. To use another backend, copy `.env.example` to `.env` and set `VITE_API_URL` to its origin, such as `https://api.company.com`. Restart Vite after editing this value and rebuild when deploying. Do not add passwords or server secrets to frontend environment variables.
+The frontend calls `https://dd-employee-crm.onrender.com/api` directly by default in development and production, with no proxy. Cookies are included in cross-origin requests. `VITE_API_URL` can override this default; set it to `https://dd-employee-crm.onrender.com` in Vercel if the variable already exists. Restart Vite after editing this value and rebuild when deploying. Do not add passwords or server secrets to frontend environment variables.
 
-`npm run build` type-checks and builds into `frontend/dist`. The backend serves that folder at http://127.0.0.1:4000. Production builds default to the page's origin when `VITE_API_URL` is unset. For `npm run preview` on a separate port, build with `VITE_API_URL` configured. Preview does not proxy requests.
+`npm run build` type-checks and builds into `frontend/dist`. Deploy this folder through Vercel. Development, production, and preview all use the Render backend above when `VITE_API_URL` is unset. Preview does not proxy requests.
 
 Wait for the `Workpulse API` startup message before signing in. During HTTP development, use the same hostname for both apps so cookies work (`localhost` with `localhost`, or `127.0.0.1` with `127.0.0.1`). For separate production domains, use HTTPS; production cookies use `SameSite=None; Secure`. Browser third-party cookie settings still apply. The API accepts all origins and reflects the requesting origin to support credentials, as required by the [browser CORS protocol](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS).

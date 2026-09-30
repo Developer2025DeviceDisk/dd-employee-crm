@@ -6,7 +6,7 @@ A working full-stack CRM built from the supplied project brief. Includes an admi
 
 The main directory has exactly two folders: **frontend** and **backend**. Each owns its package manifest, lockfile, dependencies, TypeScript configuration, and documentation. Root files provide project documentation and commands to run both together; there are no root-level dependencies or application source folders.
 
-See [frontend setup and structure](frontend/README.md) and [backend setup and structure](backend/README.md). The frontend calls the API directly using `VITE_API_URL`, or the current hostname on port 4000 in development. No Vite proxy is used. For a built deployment, the backend serves `frontend/dist` alongside the API on the same origin.
+See [frontend setup and structure](frontend/README.md) and [backend setup and structure](backend/README.md). The frontend calls `https://dd-employee-crm.onrender.com/api` directly by default in development and production. `VITE_API_URL` can override this origin. No proxy is used. To connect to a local backend instead, explicitly set `VITE_API_URL=http://127.0.0.1:4000` before starting or building the frontend.
 
 ## Run locally
 

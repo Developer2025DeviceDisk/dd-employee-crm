@@ -34,9 +34,7 @@ export interface State {
 let csrf = "";
 const backendOrigin =
   import.meta.env.VITE_API_URL?.trim() ||
-  (import.meta.env.DEV
-    ? `${window.location.protocol}//${window.location.hostname}:4000`
-    : window.location.origin);
+  "https://dd-employee-crm.onrender.com";
 const apiBase =
   backendOrigin.replace(/\/+$/, "").replace(/\/api$/, "") + "/api";
 export async function api<T = any>(

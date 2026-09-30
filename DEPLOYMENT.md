@@ -2,6 +2,8 @@
 
 This guide is specific to this repository. Deploy both folders from the same Git repository. The frontend calls the backend directly; **no Vite or Vercel API proxy is needed**.
 
+Your backend URL is `https://dd-employee-crm.onrender.com`. This is now the frontend's default API origin. Set Vercel's `VITE_API_URL` to this value if the variable exists, replacing any older value, then redeploy. Use this URL wherever this guide shows a backend hostname placeholder.
+
 ```text
 Browser → Vercel (frontend)
 Browser → Render /api (backend) → MongoDB Atlas
