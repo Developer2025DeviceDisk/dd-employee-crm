@@ -1,0 +1,12 @@
+{
+  "private": true,
+  "name": "workpulse-crm",
+  "version": "1.0.0",
+  "scripts": {
+    "test": "npm --prefix backend test",
+    "build": "npm --prefix backend run build \u0026\u0026 npm --prefix frontend run build",
+    "setup": "npm --prefix backend install \u0026\u0026 npm --prefix frontend install",
+    "dev": "node backend/node_modules/concurrently/dist/bin/concurrently.js -k \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "start": "npm --prefix backend start"
+  }
+}
